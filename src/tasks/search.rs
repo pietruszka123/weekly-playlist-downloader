@@ -1,19 +1,11 @@
 use anyhow::bail;
 use nucleo_matcher::pattern::{ Atom, AtomKind };
-use tokio::sync::SemaphorePermit;
 
-use crate::{ YtdlpSearchResult, listenbrainz_playlist::Track };
+use crate::{ YtdlpSearchResult, listenbrainz_playlist::Track, ytdlp_manager::YtdlpManager };
 
-pub async fn search_yt(track: &Track) -> anyhow::Result<YtdlpSearchResult> {
-    // let r = reqwest::get(
-    //     &format!(
-    //         "https://musicbrainz.org/ws/2/recording/{}?inc=url-rels&fmt=json",
-    //         track.identifier
-    //     )
-    // ).await;
-
+pub async fn search_yt(manager: &YtdlpManager, track: &Track) -> anyhow::Result<YtdlpSearchResult> {
     let a = tokio::process::Command
-        ::new("yt-dlp")
+        ::new(manager.ytdlp_path.as_ref().unwrap_or(&"yt-dlp".into()))
         .arg(format!("ytsearch5:{} {}", track.title, track.creator))
         .arg("--flat-playlist")
         .arg("--skip-download")
@@ -22,6 +14,10 @@ pub async fn search_yt(track: &Track) -> anyhow::Result<YtdlpSearchResult> {
         .arg("--print")
         .arg("%(.{title,webpage_url,duration,uploader,thumbnails,thumbnail,view_count})j,")
         .output().await?;
+    if !a.stderr.is_empty() {
+        bail!("{}", String::from_utf8(a.stderr).unwrap());
+    }
+
     let mut b = String::from_utf8(a.stdout).unwrap();
     b.insert(0, '[');
     b = b.trim_end_matches(",\n").to_string();
@@ -86,9 +82,9 @@ pub async fn search_yt(track: &Track) -> anyhow::Result<YtdlpSearchResult> {
     Ok(v.into_iter().nth(max_index).unwrap())
 }
 
-pub async fn search_task<'a>(
+pub async fn search_task(
+    manager: &YtdlpManager,
     track: &Track
-    // permit: SemaphorePermit<'a>
 ) -> anyhow::Result<YtdlpSearchResult> {
     // let r = reqwest::get(
     //     &format!(
@@ -97,8 +93,7 @@ pub async fn search_task<'a>(
     //     )
     // ).await;
 
-    let result = search_yt(track).await?;
+    let result = search_yt(manager, track).await?;
 
-    // drop(permit);
     Ok(result)
 }

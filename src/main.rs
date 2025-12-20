@@ -1,14 +1,14 @@
-use std::{ env, fs::OpenOptions, path::{ Path, PathBuf }, sync::Arc, time::Duration };
+use std::{ env, fs::OpenOptions, path::PathBuf, sync::Arc, time::Duration };
 
 use anyhow::{ anyhow, bail };
 use clap::Parser;
 use indicatif::{ MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle };
 use owo_colors::OwoColorize;
-use reqwest::{ Version, header::ACCEPT };
+use reqwest::header::ACCEPT;
 use serde::Deserialize;
 use tokio::{ sync::Semaphore, task::JoinSet, time::sleep };
 
-use crate::listenbrainz_playlist::Playlist;
+use crate::{ listenbrainz_playlist::Playlist, ytdlp_manager::YtdlpManager };
 
 pub mod listenbrainz_playlist;
 pub mod tasks;
@@ -69,6 +69,9 @@ struct Args {
     /// Hide all outputs
     #[arg(short, default_value_t = false)]
     quiet: bool,
+
+    #[arg(short, long, default_value_t = false)]
+    download_ytdlp: bool,
 }
 #[derive(Debug, Deserialize)]
 struct RecommendationsPlaylist {
@@ -99,6 +102,19 @@ async fn get_recomendations(username: String) -> anyhow::Result<Recommendations>
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Args::parse();
+
+    let manager = {
+        let mut manager = YtdlpManager {
+            last_checked: None,
+            version: String::new(),
+            ytdlp_path: None,
+        };
+        if cli.download_ytdlp {
+            manager.load_data(None)?;
+            manager.update().await?;
+        }
+        Arc::new(manager)
+    };
 
     let playlist = if let Some(playlist_file) = cli.playlist_file {
         println!("using file");
@@ -141,6 +157,7 @@ async fn main() -> anyhow::Result<()> {
         let title = title.clone();
         let p = progress.clone();
         let total_progress = total_progress.clone();
+        let manager = manager.clone();
         tasks.spawn(async move {
             let permit = semaphore.acquire().await?;
             let progress_style = ProgressStyle::with_template(
@@ -154,9 +171,15 @@ async fn main() -> anyhow::Result<()> {
             );
             progress.enable_steady_tick(Duration::from_millis(120));
             progress.set_message(format!("{} by {}", track.title.clone(), track.creator.clone()));
-            let result = tasks::search::search_task(&track).await?;
-
-            tasks::download::download_task(&track, result, &title, track_number as u16).await?;
+            let result = tasks::search::search_task(&manager, &track).await?;
+            println!("p");
+            tasks::download::download_task(
+                &manager,
+                &track,
+                result,
+                &title,
+                track_number as u16
+            ).await?;
 
             drop(permit);
             progress.finish_with_message("Finished".green().to_string());
@@ -169,8 +192,10 @@ async fn main() -> anyhow::Result<()> {
     }
 
     while let Some(res) = tasks.join_next().await {
-        if let Err(err) = res {
-            println!("{}", err);
+        match res {
+            Err(e) => total_progress.println(format!("error while waiting for error {}", e)),
+            Ok(Err(e)) => total_progress.println(format!("{}", e)),
+            _ => {}
         }
     }
     total_progress.finish();

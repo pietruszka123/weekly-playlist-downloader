@@ -5,7 +5,7 @@ use audiotags::{ Album, AudioTagEdit, AudioTagWrite, Picture };
 use image::ImageReader;
 use tokio::{ sync::Semaphore, time::sleep };
 
-use crate::{ YtdlpSearchResult, listenbrainz_playlist::Track };
+use crate::{ YtdlpSearchResult, listenbrainz_playlist::Track, ytdlp_manager::YtdlpManager };
 
 static IMAGE_SEMAPHORE: Semaphore = Semaphore::const_new(4);
 async fn get_image(cover_url: &str) -> anyhow::Result<Vec<u8>> {
@@ -27,9 +27,9 @@ async fn get_image(cover_url: &str) -> anyhow::Result<Vec<u8>> {
     image.write_to(Cursor::new(&mut converted), image::ImageFormat::Png)?;
     Ok(converted)
 }
-async fn download(url: &str, filename: &Path) -> anyhow::Result<()> {
+async fn download(manager: &YtdlpManager, url: &str, filename: &Path) -> anyhow::Result<()> {
     let output = tokio::process::Command
-        ::new("yt-dlp")
+        ::new(manager.ytdlp_path.as_ref().unwrap_or(&"yt-dlp".into()))
         .arg(url)
         // .arg("--embed-metadata")
         .arg("-f")
@@ -44,6 +44,7 @@ async fn download(url: &str, filename: &Path) -> anyhow::Result<()> {
 }
 
 pub async fn download_task(
+    manager: &YtdlpManager,
     track: &Track,
     search_result: YtdlpSearchResult,
     playlist_title: &str,
@@ -52,7 +53,7 @@ pub async fn download_task(
     let path = PathBuf::from(
         format!("./{}/{}.m4a", playlist_title.replace("/", "-"), track.title.replace("/", "-"))
     );
-    download(&search_result.webpage_url, &path).await?;
+    download(manager, &search_result.webpage_url, &path).await?;
     let mut tag = audiotags::Mp4Tag::new();
     tag.add_artist(&track.creator);
     tag.set_album_title(&track.album);
