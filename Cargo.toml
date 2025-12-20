@@ -1,0 +1,28 @@
+[package]
+name = "weekly_playlist_downloader"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+log = "0.4"
+fern = "0.7"
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+dirs = "6.0"
+
+nucleo-matcher = "0.3"
+audiotags = "0.5.0"
+
+clap = { version = "4.5.53", features = ["derive", "string"] }
+indicatif = { version = "0.18", features = ["tokio"] }
+owo-colors = "4"
+
+webp = "0.3"
+png = "0.18"
+image = "0.25"
+
+anyhow = "1.0"
+
+reqwest = { version = "0.12", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
