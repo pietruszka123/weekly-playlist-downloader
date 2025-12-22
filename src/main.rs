@@ -45,7 +45,6 @@ pub struct YtdlpSearchResult {
 fn get_default_output_path() -> PathBuf {
     let mut path = env::current_exe().unwrap();
     path.pop();
-    // path.push("log/debug.log");
     path
 }
 #[derive(Parser, Debug)]
@@ -169,10 +168,10 @@ async fn main() -> anyhow::Result<()> {
                     progress_style
                 )
             );
+            let message = format!("{} by {}", track.title.clone(), track.creator.clone());
             progress.enable_steady_tick(Duration::from_millis(120));
-            progress.set_message(format!("{} by {}", track.title.clone(), track.creator.clone()));
+            progress.set_message(message.clone());
             let result = tasks::search::search_task(&manager, &track).await?;
-            println!("p");
             tasks::download::download_task(
                 &manager,
                 &track,
@@ -182,7 +181,7 @@ async fn main() -> anyhow::Result<()> {
             ).await?;
 
             drop(permit);
-            progress.finish_with_message("Finished".green().to_string());
+            progress.finish_with_message(message.green().to_string());
             sleep(Duration::from_millis(200)).await;
             p.remove(&progress);
             total_progress.inc(1);
