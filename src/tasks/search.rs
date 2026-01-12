@@ -6,7 +6,7 @@ use crate::{ YtdlpSearchResult, listenbrainz_playlist::Track, ytdlp_manager::Ytd
 pub async fn search_yt(manager: &YtdlpManager, track: &Track) -> anyhow::Result<YtdlpSearchResult> {
     let a = tokio::process::Command
         ::new(manager.ytdlp_path.as_ref().unwrap_or(&"yt-dlp".into()))
-        .arg(format!("ytsearch5:{} {}", track.title, track.creator))
+        .arg(format!("ytsearch{}:{} {}",10, track.title, track.creator))
         .arg("--flat-playlist")
         .arg("--skip-download")
         .arg("--quiet")
